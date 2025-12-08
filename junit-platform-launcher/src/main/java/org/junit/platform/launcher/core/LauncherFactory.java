@@ -22,12 +22,14 @@ import java.util.function.Predicate;
 
 import org.apiguardian.api.API;
 import org.junit.platform.commons.PreconditionViolationException;
+import org.junit.platform.commons.util.ClassLoaderUtils;
 import org.junit.platform.commons.util.ClassNamePatternFilterUtils;
 import org.junit.platform.commons.util.Preconditions;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.TestEngine;
 import org.junit.platform.engine.support.store.Namespace;
 import org.junit.platform.engine.support.store.NamespacedHierarchicalStore;
+import org.junit.platform.launcher.BootClassLoaderProvider;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryListener;
 import org.junit.platform.launcher.LauncherInterceptor;
@@ -173,11 +175,11 @@ public class LauncherFactory {
 		// We use the thread context classloader first to allow test frameworks to inject custom classloaders
 		ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
 		if (contextClassLoader == null) {
-			contextClassLoader = org.junit.platform.commons.util.ClassLoaderUtils.getDefaultClassLoader();
+			contextClassLoader = ClassLoaderUtils.getDefaultClassLoader();
 		}
-		Iterable<org.junit.platform.launcher.BootClassLoaderProvider> providers = ServiceLoaderRegistry.load(
-			org.junit.platform.launcher.BootClassLoaderProvider.class, contextClassLoader);
-		for (org.junit.platform.launcher.BootClassLoaderProvider provider : providers) {
+		Iterable<BootClassLoaderProvider> providers = ServiceLoaderRegistry.load(BootClassLoaderProvider.class,
+			contextClassLoader);
+		for (BootClassLoaderProvider provider : providers) {
 			return provider.getBootClassLoader();
 		}
 		return contextClassLoader;

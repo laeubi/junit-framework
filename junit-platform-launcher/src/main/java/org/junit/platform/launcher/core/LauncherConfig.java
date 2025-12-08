@@ -10,6 +10,7 @@
 
 package org.junit.platform.launcher.core;
 
+import static org.apiguardian.api.API.Status.EXPERIMENTAL;
 import static org.apiguardian.api.API.Status.STABLE;
 
 import java.util.Collection;
@@ -172,7 +173,7 @@ public interface LauncherConfig {
 	 * @return the boot classloader, or {@code null} to use the default classloader
 	 * @since 6.1
 	 */
-	@API(status = STABLE, since = "1.10")
+	@API(status = EXPERIMENTAL, since = "6.1")
 	@Nullable ClassLoader getBootClassLoader();
 
 	/**
@@ -367,7 +368,7 @@ public interface LauncherConfig {
 		 * @return this builder for method chaining
 		 * @since 6.1
 		 */
-		@API(status = STABLE, since = "1.10")
+		@API(status = EXPERIMENTAL, since = "6.1")
 		public Builder bootClassLoader(ClassLoader bootClassLoader) {
 			this.bootClassLoader = bootClassLoader;
 			return this;

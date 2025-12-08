@@ -11,8 +11,6 @@
 package org.junit.platform.launcher.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.TemporaryClasspathExecutor.withAdditionalClasspathRoot;
-import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
 import static org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder.request;
 
 import java.net.URL;
@@ -21,9 +19,6 @@ import java.net.URLClassLoader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.platform.fakes.TestEngineSpy;
-import org.junit.platform.launcher.BootClassLoaderProvider;
-import org.junit.platform.launcher.Launcher;
-import org.junit.platform.launcher.LauncherSession;
 import org.junit.platform.launcher.TestBootClassLoaderProvider;
 
 /**
