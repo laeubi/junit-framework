@@ -98,9 +98,11 @@ public class LauncherFactory {
 	public static LauncherSession openSession(LauncherConfig config) throws PreconditionViolationException {
 		Preconditions.notNull(config, "LauncherConfig must not be null");
 		LauncherConfigurationParameters configurationParameters = LauncherConfigurationParameters.builder().build();
-		return new DefaultLauncherSession(collectLauncherInterceptors(configurationParameters),
-			() -> createLauncherSessionListener(config),
-			sessionLevelStore -> createDefaultLauncher(config, configurationParameters, sessionLevelStore));
+		ClassLoader bootClassLoader = resolveBootClassLoader(config);
+		return new DefaultLauncherSession(collectLauncherInterceptors(configurationParameters, bootClassLoader),
+			() -> createLauncherSessionListener(config, bootClassLoader),
+			sessionLevelStore -> createDefaultLauncher(config, configurationParameters, sessionLevelStore,
+				bootClassLoader));
 	}
 
 	/**
@@ -129,84 +131,104 @@ public class LauncherFactory {
 	public static Launcher create(LauncherConfig config) throws PreconditionViolationException {
 		Preconditions.notNull(config, "LauncherConfig must not be null");
 		LauncherConfigurationParameters configurationParameters = LauncherConfigurationParameters.builder().build();
+		ClassLoader bootClassLoader = resolveBootClassLoader(config);
 		return new SessionPerRequestLauncher(
-			sessionLevelStore -> createDefaultLauncher(config, configurationParameters, sessionLevelStore),
-			() -> createLauncherSessionListener(config), () -> collectLauncherInterceptors(configurationParameters));
+			sessionLevelStore -> createDefaultLauncher(config, configurationParameters, sessionLevelStore,
+				bootClassLoader),
+			() -> createLauncherSessionListener(config, bootClassLoader),
+			() -> collectLauncherInterceptors(configurationParameters, bootClassLoader));
 	}
 
 	private static DefaultLauncher createDefaultLauncher(LauncherConfig config,
 			LauncherConfigurationParameters configurationParameters,
-			NamespacedHierarchicalStore<Namespace> sessionLevelStore) {
-		Set<TestEngine> engines = collectTestEngines(config);
-		List<PostDiscoveryFilter> filters = collectPostDiscoveryFilters(config);
+			NamespacedHierarchicalStore<Namespace> sessionLevelStore, ClassLoader bootClassLoader) {
+		Set<TestEngine> engines = collectTestEngines(config, bootClassLoader);
+		List<PostDiscoveryFilter> filters = collectPostDiscoveryFilters(config, bootClassLoader);
 		DefaultLauncher launcher = new DefaultLauncher(engines, filters, sessionLevelStore);
 		JfrUtils.registerListeners(launcher);
-		registerLauncherDiscoveryListeners(config, launcher);
-		registerTestExecutionListeners(config, launcher, configurationParameters);
+		registerLauncherDiscoveryListeners(config, launcher, bootClassLoader);
+		registerTestExecutionListeners(config, launcher, configurationParameters, bootClassLoader);
 
 		return launcher;
 	}
 
+	private static ClassLoader resolveBootClassLoader(LauncherConfig config) {
+		ClassLoader configuredClassLoader = config.getBootClassLoader();
+		if (configuredClassLoader != null) {
+			return configuredClassLoader;
+		}
+		// Try to discover a BootClassLoaderProvider via ServiceLoader
+		Iterable<org.junit.platform.launcher.BootClassLoaderProvider> providers = ServiceLoaderRegistry.load(
+			org.junit.platform.launcher.BootClassLoaderProvider.class);
+		for (org.junit.platform.launcher.BootClassLoaderProvider provider : providers) {
+			return provider.getBootClassLoader();
+		}
+		return org.junit.platform.commons.util.ClassLoaderUtils.getDefaultClassLoader();
+	}
+
 	private static List<LauncherInterceptor> collectLauncherInterceptors(
-			LauncherConfigurationParameters configurationParameters) {
+			LauncherConfigurationParameters configurationParameters, ClassLoader bootClassLoader) {
 		List<LauncherInterceptor> interceptors = new ArrayList<>();
 		if (configurationParameters.getBoolean(ENABLE_LAUNCHER_INTERCEPTORS).orElse(false)) {
-			ServiceLoaderRegistry.load(LauncherInterceptor.class).forEach(interceptors::add);
+			ServiceLoaderRegistry.load(LauncherInterceptor.class, bootClassLoader).forEach(interceptors::add);
 		}
 		interceptors.add(ClasspathAlignmentCheckingLauncherInterceptor.INSTANCE);
 		return interceptors;
 	}
 
-	private static Set<TestEngine> collectTestEngines(LauncherConfig config) {
+	private static Set<TestEngine> collectTestEngines(LauncherConfig config, ClassLoader bootClassLoader) {
 		Set<TestEngine> engines = new LinkedHashSet<>();
 		if (config.isTestEngineAutoRegistrationEnabled()) {
-			new ServiceLoaderTestEngineRegistry().loadTestEngines().forEach(engines::add);
+			new ServiceLoaderTestEngineRegistry(bootClassLoader).loadTestEngines().forEach(engines::add);
 		}
 		engines.addAll(config.getAdditionalTestEngines());
 		return engines;
 	}
 
-	private static LauncherSessionListener createLauncherSessionListener(LauncherConfig config) {
+	private static LauncherSessionListener createLauncherSessionListener(LauncherConfig config,
+			ClassLoader bootClassLoader) {
 		ListenerRegistry<LauncherSessionListener> listenerRegistry = ListenerRegistry.forLauncherSessionListeners();
 		if (config.isLauncherSessionListenerAutoRegistrationEnabled()) {
-			ServiceLoaderRegistry.load(LauncherSessionListener.class).forEach(listenerRegistry::add);
+			ServiceLoaderRegistry.load(LauncherSessionListener.class, bootClassLoader).forEach(listenerRegistry::add);
 		}
 		config.getAdditionalLauncherSessionListeners().forEach(listenerRegistry::add);
 		return listenerRegistry.getCompositeListener();
 	}
 
-	private static List<PostDiscoveryFilter> collectPostDiscoveryFilters(LauncherConfig config) {
+	private static List<PostDiscoveryFilter> collectPostDiscoveryFilters(LauncherConfig config,
+			ClassLoader bootClassLoader) {
 		List<PostDiscoveryFilter> filters = new ArrayList<>();
 		if (config.isPostDiscoveryFilterAutoRegistrationEnabled()) {
-			ServiceLoaderRegistry.load(PostDiscoveryFilter.class).forEach(filters::add);
+			ServiceLoaderRegistry.load(PostDiscoveryFilter.class, bootClassLoader).forEach(filters::add);
 		}
 		filters.addAll(config.getAdditionalPostDiscoveryFilters());
 		return filters;
 	}
 
-	private static void registerLauncherDiscoveryListeners(LauncherConfig config, Launcher launcher) {
+	private static void registerLauncherDiscoveryListeners(LauncherConfig config, Launcher launcher,
+			ClassLoader bootClassLoader) {
 		if (config.isLauncherDiscoveryListenerAutoRegistrationEnabled()) {
-			ServiceLoaderRegistry.load(LauncherDiscoveryListener.class).forEach(
+			ServiceLoaderRegistry.load(LauncherDiscoveryListener.class, bootClassLoader).forEach(
 				launcher::registerLauncherDiscoveryListeners);
 		}
 		config.getAdditionalLauncherDiscoveryListeners().forEach(launcher::registerLauncherDiscoveryListeners);
 	}
 
 	private static void registerTestExecutionListeners(LauncherConfig config, Launcher launcher,
-			LauncherConfigurationParameters configurationParameters) {
+			LauncherConfigurationParameters configurationParameters, ClassLoader bootClassLoader) {
 		if (config.isTestExecutionListenerAutoRegistrationEnabled()) {
-			loadAndFilterTestExecutionListeners(configurationParameters).forEach(
+			loadAndFilterTestExecutionListeners(configurationParameters, bootClassLoader).forEach(
 				launcher::registerTestExecutionListeners);
 		}
 		config.getAdditionalTestExecutionListeners().forEach(launcher::registerTestExecutionListeners);
 	}
 
 	private static Iterable<TestExecutionListener> loadAndFilterTestExecutionListeners(
-			ConfigurationParameters configurationParameters) {
+			ConfigurationParameters configurationParameters, ClassLoader bootClassLoader) {
 		Predicate<String> classNameFilter = configurationParameters.get(DEACTIVATE_LISTENERS_PATTERN_PROPERTY_NAME) //
 				.map(ClassNamePatternFilterUtils::excludeMatchingClassNames) //
 				.orElse(__ -> true);
-		return ServiceLoaderRegistry.load(TestExecutionListener.class, classNameFilter);
+		return ServiceLoaderRegistry.load(TestExecutionListener.class, bootClassLoader, classNameFilter);
 	}
 
 }

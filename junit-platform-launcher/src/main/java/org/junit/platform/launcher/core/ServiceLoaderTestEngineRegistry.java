@@ -26,12 +26,18 @@ import org.junit.platform.engine.TestEngine;
 @API(status = INTERNAL, since = "1.0", consumers = "org.junit.platform.suite.engine")
 public final class ServiceLoaderTestEngineRegistry {
 
+	private final ClassLoader classLoader;
+
 	public ServiceLoaderTestEngineRegistry() {
+		this(ClassLoaderUtils.getDefaultClassLoader());
+	}
+
+	public ServiceLoaderTestEngineRegistry(ClassLoader classLoader) {
+		this.classLoader = classLoader;
 	}
 
 	public Iterable<TestEngine> loadTestEngines() {
-		Iterable<TestEngine> testEngines = ServiceLoader.load(TestEngine.class,
-			ClassLoaderUtils.getDefaultClassLoader());
+		Iterable<TestEngine> testEngines = ServiceLoader.load(TestEngine.class, classLoader);
 		getLogger().config(() -> TestEngineFormatter.format("Discovered TestEngines", testEngines));
 		return testEngines;
 	}

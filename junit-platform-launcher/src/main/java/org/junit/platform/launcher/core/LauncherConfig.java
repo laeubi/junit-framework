@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 
 import org.apiguardian.api.API;
+import org.jspecify.annotations.Nullable;
 import org.junit.platform.commons.util.Preconditions;
 import org.junit.platform.engine.TestEngine;
 import org.junit.platform.launcher.Launcher;
@@ -165,6 +166,16 @@ public interface LauncherConfig {
 	Collection<PostDiscoveryFilter> getAdditionalPostDiscoveryFilters();
 
 	/**
+	 * Get the boot classloader to use for discovering and loading JUnit
+	 * Platform components via the ServiceLoader mechanism.
+	 *
+	 * @return the boot classloader, or {@code null} to use the default classloader
+	 * @since 6.1
+	 */
+	@API(status = STABLE, since = "1.10")
+	@Nullable ClassLoader getBootClassLoader();
+
+	/**
 	 * Create a new {@link LauncherConfig.Builder}.
 	 *
 	 * @return a new builder; never {@code null}
@@ -188,6 +199,7 @@ public interface LauncherConfig {
 		private final Collection<LauncherDiscoveryListener> discoveryListeners = new LinkedHashSet<>();
 		private final Collection<TestExecutionListener> executionListeners = new LinkedHashSet<>();
 		private final Collection<PostDiscoveryFilter> postDiscoveryFilters = new LinkedHashSet<>();
+		private @Nullable ClassLoader bootClassLoader = null;
 
 		private Builder() {
 			/* no-op */
@@ -347,6 +359,21 @@ public interface LauncherConfig {
 		}
 
 		/**
+		 * Set the boot classloader to use for discovering and loading JUnit
+		 * Platform components via the ServiceLoader mechanism.
+		 *
+		 * @param bootClassLoader the boot classloader to use, or {@code null}
+		 * to use the default classloader
+		 * @return this builder for method chaining
+		 * @since 6.1
+		 */
+		@API(status = STABLE, since = "1.10")
+		public Builder bootClassLoader(ClassLoader bootClassLoader) {
+			this.bootClassLoader = bootClassLoader;
+			return this;
+		}
+
+		/**
 		 * Build the {@link LauncherConfig} that has been configured via this
 		 * builder.
 		 */
@@ -356,7 +383,7 @@ public interface LauncherConfig {
 				this.launcherDiscoveryListenerAutoRegistrationEnabled,
 				this.testExecutionListenerAutoRegistrationEnabled, this.postDiscoveryFilterAutoRegistrationEnabled,
 				this.engines, this.sessionListeners, this.discoveryListeners, this.executionListeners,
-				this.postDiscoveryFilters);
+				this.postDiscoveryFilters, this.bootClassLoader);
 		}
 
 	}
