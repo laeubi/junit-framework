@@ -14,6 +14,7 @@ import static java.util.Collections.unmodifiableCollection;
 
 import java.util.Collection;
 
+import org.jspecify.annotations.Nullable;
 import org.junit.platform.engine.TestEngine;
 import org.junit.platform.launcher.LauncherDiscoveryListener;
 import org.junit.platform.launcher.LauncherSessionListener;
@@ -37,6 +38,7 @@ class DefaultLauncherConfig implements LauncherConfig {
 	private final Collection<LauncherDiscoveryListener> additionalLauncherDiscoveryListeners;
 	private final Collection<TestExecutionListener> additionalTestExecutionListeners;
 	private final Collection<PostDiscoveryFilter> additionalPostDiscoveryFilters;
+	private final @Nullable ClassLoader bootClassLoader;
 
 	DefaultLauncherConfig(boolean testEngineAutoRegistrationEnabled,
 			boolean launcherSessionListenerAutoRegistrationEnabled,
@@ -46,7 +48,7 @@ class DefaultLauncherConfig implements LauncherConfig {
 			Collection<LauncherSessionListener> additionalLauncherSessionListeners,
 			Collection<LauncherDiscoveryListener> additionalLauncherDiscoveryListeners,
 			Collection<TestExecutionListener> additionalTestExecutionListeners,
-			Collection<PostDiscoveryFilter> additionalPostDiscoveryFilters) {
+			Collection<PostDiscoveryFilter> additionalPostDiscoveryFilters, @Nullable ClassLoader bootClassLoader) {
 		this.launcherSessionListenerAutoRegistrationEnabled = launcherSessionListenerAutoRegistrationEnabled;
 		this.launcherDiscoveryListenerAutoRegistrationEnabled = launcherDiscoveryListenerAutoRegistrationEnabled;
 		this.testExecutionListenerAutoRegistrationEnabled = testExecutionListenerAutoRegistrationEnabled;
@@ -57,6 +59,7 @@ class DefaultLauncherConfig implements LauncherConfig {
 		this.additionalLauncherDiscoveryListeners = unmodifiableCollection(additionalLauncherDiscoveryListeners);
 		this.additionalTestExecutionListeners = unmodifiableCollection(additionalTestExecutionListeners);
 		this.additionalPostDiscoveryFilters = unmodifiableCollection(additionalPostDiscoveryFilters);
+		this.bootClassLoader = bootClassLoader;
 	}
 
 	@Override
@@ -107,6 +110,11 @@ class DefaultLauncherConfig implements LauncherConfig {
 	@Override
 	public Collection<PostDiscoveryFilter> getAdditionalPostDiscoveryFilters() {
 		return this.additionalPostDiscoveryFilters;
+	}
+
+	@Override
+	public @Nullable ClassLoader getBootClassLoader() {
+		return this.bootClassLoader;
 	}
 
 }

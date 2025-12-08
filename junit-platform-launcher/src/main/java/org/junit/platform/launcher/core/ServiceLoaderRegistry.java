@@ -28,11 +28,19 @@ import org.junit.platform.commons.util.ServiceLoaderUtils;
 class ServiceLoaderRegistry {
 
 	static <T> Iterable<T> load(Class<T> type) {
-		return load(type, __ -> true, instances -> logLoadedInstances(type, instances, null));
+		return load(type, ClassLoaderUtils.getDefaultClassLoader());
+	}
+
+	static <T> Iterable<T> load(Class<T> type, ClassLoader classLoader) {
+		return load(type, classLoader, __ -> true, instances -> logLoadedInstances(type, instances, null));
 	}
 
 	static <T> Iterable<T> load(@SuppressWarnings("SameParameterValue") Class<T> type,
 			Predicate<String> classNameFilter) {
+		return load(type, ClassLoaderUtils.getDefaultClassLoader(), classNameFilter);
+	}
+
+	static <T> Iterable<T> load(Class<T> type, ClassLoader classLoader, Predicate<String> classNameFilter) {
 		List<String> exclusions = new ArrayList<>();
 		Predicate<String> collectingClassNameFilter = className -> {
 			boolean included = classNameFilter.test(className);
@@ -41,7 +49,8 @@ class ServiceLoaderRegistry {
 			}
 			return included;
 		};
-		return load(type, collectingClassNameFilter, instances -> logLoadedInstances(type, instances, exclusions));
+		return load(type, classLoader, collectingClassNameFilter,
+			instances -> logLoadedInstances(type, instances, exclusions));
 	}
 
 	private static <T> String logLoadedInstances(Class<T> type, List<T> instances, @Nullable List<String> exclusions) {
@@ -52,9 +61,9 @@ class ServiceLoaderRegistry {
 		return "Loaded %s instances: %s (excluded classes: %s)".formatted(typeName, instances, exclusions);
 	}
 
-	private static <T> List<T> load(Class<T> type, Predicate<String> classNameFilter,
+	private static <T> List<T> load(Class<T> type, ClassLoader classLoader, Predicate<String> classNameFilter,
 			Function<List<T>, String> logMessageSupplier) {
-		ServiceLoader<T> serviceLoader = ServiceLoader.load(type, ClassLoaderUtils.getDefaultClassLoader());
+		ServiceLoader<T> serviceLoader = ServiceLoader.load(type, classLoader);
 		Predicate<Class<? extends T>> providerPredicate = clazz -> classNameFilter.test(clazz.getName());
 		List<T> instances = ServiceLoaderUtils.filter(serviceLoader, providerPredicate).toList();
 		getLogger().config(() -> logMessageSupplier.apply(instances));
