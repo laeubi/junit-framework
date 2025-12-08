@@ -98,11 +98,17 @@ public class LauncherFactory {
 	public static LauncherSession openSession(LauncherConfig config) throws PreconditionViolationException {
 		Preconditions.notNull(config, "LauncherConfig must not be null");
 		LauncherConfigurationParameters configurationParameters = LauncherConfigurationParameters.builder().build();
-		ClassLoader bootClassLoader = resolveBootClassLoader(config);
-		return new DefaultLauncherSession(collectLauncherInterceptors(configurationParameters, bootClassLoader),
-			() -> createLauncherSessionListener(config, bootClassLoader),
-			sessionLevelStore -> createDefaultLauncher(config, configurationParameters, sessionLevelStore,
-				bootClassLoader));
+		return new DefaultLauncherSession(collectLauncherInterceptors(configurationParameters),
+			() -> {
+				// Resolve boot classloader after interceptors have been created and may have modified the context classloader
+				ClassLoader bootClassLoader = resolveBootClassLoader(config);
+				return createLauncherSessionListener(config, bootClassLoader);
+			},
+			sessionLevelStore -> {
+				// Resolve boot classloader after interceptors have been created and may have modified the context classloader
+				ClassLoader bootClassLoader = resolveBootClassLoader(config);
+				return createDefaultLauncher(config, configurationParameters, sessionLevelStore, bootClassLoader);
+			});
 	}
 
 	/**
@@ -131,12 +137,18 @@ public class LauncherFactory {
 	public static Launcher create(LauncherConfig config) throws PreconditionViolationException {
 		Preconditions.notNull(config, "LauncherConfig must not be null");
 		LauncherConfigurationParameters configurationParameters = LauncherConfigurationParameters.builder().build();
-		ClassLoader bootClassLoader = resolveBootClassLoader(config);
 		return new SessionPerRequestLauncher(
-			sessionLevelStore -> createDefaultLauncher(config, configurationParameters, sessionLevelStore,
-				bootClassLoader),
-			() -> createLauncherSessionListener(config, bootClassLoader),
-			() -> collectLauncherInterceptors(configurationParameters, bootClassLoader));
+			sessionLevelStore -> {
+				// Resolve boot classloader after interceptors have been created and may have modified the context classloader
+				ClassLoader bootClassLoader = resolveBootClassLoader(config);
+				return createDefaultLauncher(config, configurationParameters, sessionLevelStore, bootClassLoader);
+			},
+			() -> {
+				// Resolve boot classloader after interceptors have been created and may have modified the context classloader
+				ClassLoader bootClassLoader = resolveBootClassLoader(config);
+				return createLauncherSessionListener(config, bootClassLoader);
+			},
+			() -> collectLauncherInterceptors(configurationParameters));
 	}
 
 	private static DefaultLauncher createDefaultLauncher(LauncherConfig config,
@@ -158,19 +170,26 @@ public class LauncherFactory {
 			return configuredClassLoader;
 		}
 		// Try to discover a BootClassLoaderProvider via ServiceLoader
+		// We use the thread context classloader first to allow test frameworks to inject custom classloaders
+		ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
+		if (contextClassLoader == null) {
+			contextClassLoader = org.junit.platform.commons.util.ClassLoaderUtils.getDefaultClassLoader();
+		}
 		Iterable<org.junit.platform.launcher.BootClassLoaderProvider> providers = ServiceLoaderRegistry.load(
-			org.junit.platform.launcher.BootClassLoaderProvider.class);
+			org.junit.platform.launcher.BootClassLoaderProvider.class, contextClassLoader);
 		for (org.junit.platform.launcher.BootClassLoaderProvider provider : providers) {
 			return provider.getBootClassLoader();
 		}
-		return org.junit.platform.commons.util.ClassLoaderUtils.getDefaultClassLoader();
+		return contextClassLoader;
 	}
 
 	private static List<LauncherInterceptor> collectLauncherInterceptors(
-			LauncherConfigurationParameters configurationParameters, ClassLoader bootClassLoader) {
+			LauncherConfigurationParameters configurationParameters) {
 		List<LauncherInterceptor> interceptors = new ArrayList<>();
 		if (configurationParameters.getBoolean(ENABLE_LAUNCHER_INTERCEPTORS).orElse(false)) {
-			ServiceLoaderRegistry.load(LauncherInterceptor.class, bootClassLoader).forEach(interceptors::add);
+			// LauncherInterceptors are loaded with the default classloader, not the boot classloader,
+			// because they may modify the thread context classloader for subsequent discovery
+			ServiceLoaderRegistry.load(LauncherInterceptor.class).forEach(interceptors::add);
 		}
 		interceptors.add(ClasspathAlignmentCheckingLauncherInterceptor.INSTANCE);
 		return interceptors;
